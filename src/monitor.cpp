@@ -46,7 +46,7 @@ void setup_monitor(void){
     timeClient.setTimeOffset(3600 * Settings.Timezone);
 
     Serial.println("TimeClient setup done");
-#ifdef NERDMINER_T_HMI
+#ifdef NERDMINER_T_HMI || defined ESP32_2432S028R
     poolAPIUrl = getPoolAPIUrl();
     Serial.println("poolAPIUrl: " + poolAPIUrl);
 #endif
@@ -364,7 +364,7 @@ pool_data getPoolData(void){
           String btcWallet = Settings.BtcWallet;
           // Serial.println(btcWallet);
           if (btcWallet.indexOf(".")>0) btcWallet = btcWallet.substring(0,btcWallet.indexOf("."));
-#ifdef NERDMINER_T_HMI
+#ifdef NERDMINER_T_HMI || defined ESP32_2432S028R
           Serial.println("Pool API : " + poolAPIUrl+btcWallet);
           http.begin(poolAPIUrl+btcWallet);
 #else
