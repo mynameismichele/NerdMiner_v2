@@ -13,7 +13,7 @@
 #define UPDATE_PERIOD_h   5
 
 //API BTC price (Update to USDT cus it's more liquidity and flow price updade)   
-#define getBTCAPI "https://api.blockchain.com/v3/exchange/tickers/BTC-EUR"
+#define getBTCAPI "https://api.blockchain.com/v3/exchange/tickers/BTC-"
 #define UPDATE_BTC_min   1
 
 //API Block height
@@ -120,6 +120,7 @@ typedef struct{
 }pool_data;
 
 void setup_monitor(void);
+String sanitizeCurrency(const char* value);
 
 mining_data getMiningData(unsigned long mElapsed);
 clock_data getClockData(unsigned long mElapsed);

@@ -141,15 +141,32 @@ String getBlockHeight(void){
 
 unsigned long mBTCUpdate = 0;
 
+// Keep only letters, uppercase, max 4 chars (e.g. "eur " -> "EUR"); fall back to default if empty
+String sanitizeCurrency(const char* value){
+    String out = "";
+    for (const char* c = value; c && *c && out.length() < 4; c++) {
+        if (isalpha((unsigned char)*c)) out += (char)toupper((unsigned char)*c);
+    }
+    if (out.length() == 0) out = DEFAULT_CURRENCY;
+    return out;
+}
+
+// Text shown after the price: bitmap fonts have no euro glyph, so EUR -> "E"
+static String currencySuffix(void){
+    if (Settings.Currency == "USD" || Settings.Currency == "USDT") return "$";
+    if (Settings.Currency == "EUR") return "E";
+    return Settings.Currency;
+}
+
 String getBTCprice(void){
     
     if((mBTCUpdate == 0) || (millis() - mBTCUpdate > UPDATE_BTC_min * 60 * 1000)){
     
-        if (WiFi.status() != WL_CONNECTED) return (String(bitcoin_price) + "$");
+        if (WiFi.status() != WL_CONNECTED) return (String(bitcoin_price) + currencySuffix());
         
         HTTPClient http;
         try {
-        http.begin(getBTCAPI);
+        http.begin(String(getBTCAPI) + Settings.Currency);
         int httpCode = http.GET();
 
         if (httpCode == HTTP_CODE_OK) {
@@ -170,7 +187,7 @@ String getBTCprice(void){
         }
     }
   
-  return (String(bitcoin_price) + "$");
+  return (String(bitcoin_price) + currencySuffix());
 }
 
 unsigned long mTriggerUpdate = 0;

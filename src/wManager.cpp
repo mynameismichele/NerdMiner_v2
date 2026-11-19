@@ -160,6 +160,9 @@ void init_WifiManager()
   sprintf(charZone, "%d", Settings.Timezone);
   WiFiManagerParameter time_text_box_num("TimeZone", "TimeZone fromUTC (-12/+12)", charZone, 3);
 
+  // Text box (String) - currency of the BTC price (USD, EUR, GBP, ...)
+  WiFiManagerParameter currency_text_box("Currency", "BTC price currency (EUR, USD, GBP...)", Settings.Currency.c_str(), 4);
+
   WiFiManagerParameter features_html("<hr><br><label style=\"font-weight: bold;margin-bottom: 25px;display: inline-block;\">Features</label>");
 
   char checkboxParams[24] = "type=\"checkbox\"";
@@ -177,6 +180,7 @@ void init_WifiManager()
   wm.addParameter(&password_text_box);
   wm.addParameter(&addr_text_box);
   wm.addParameter(&time_text_box_num);
+  wm.addParameter(&currency_text_box);
   wm.addParameter(&features_html);
   wm.addParameter(&save_stats_to_nvs);
   #ifdef ESP32_2432S028R
@@ -206,6 +210,7 @@ void init_WifiManager()
             strncpy(Settings.PoolPassword, password_text_box.getValue(), sizeof(Settings.PoolPassword));
             strncpy(Settings.BtcWallet, addr_text_box.getValue(), sizeof(Settings.BtcWallet));
             Settings.Timezone = atoi(time_text_box_num.getValue());
+            Settings.Currency = sanitizeCurrency(currency_text_box.getValue());
             //Serial.println(save_stats_to_nvs.getValue());
             Settings.saveStats = (strncmp(save_stats_to_nvs.getValue(), "T", 1) == 0);
             #ifdef ESP32_2432S028R
@@ -236,6 +241,7 @@ void init_WifiManager()
                 strncpy(Settings.PoolPassword, password_text_box.getValue(), sizeof(Settings.PoolPassword));
                 strncpy(Settings.BtcWallet, addr_text_box.getValue(), sizeof(Settings.BtcWallet));
                 Settings.Timezone = atoi(time_text_box_num.getValue());
+            Settings.Currency = sanitizeCurrency(currency_text_box.getValue());
                 // Serial.println(save_stats_to_nvs.getValue());
                 Settings.saveStats = (strncmp(save_stats_to_nvs.getValue(), "T", 1) == 0);
                 #ifdef ESP32_2432S028R
@@ -281,6 +287,7 @@ void init_WifiManager()
 
         //Convert the number value
         Settings.Timezone = atoi(time_text_box_num.getValue());
+            Settings.Currency = sanitizeCurrency(currency_text_box.getValue());
         Serial.print("TimeZone fromUTC: ");
         Serial.println(Settings.Timezone);
 

@@ -121,6 +121,7 @@ bool SDCard::loadConfigFile(TSettings* Settings)
                         Settings->Timezone = json[JSON_KEY_TIMEZONE].as<int>();
                     if (json.containsKey(JSON_KEY_STATS2NV))
                         Settings->saveStats = json[JSON_KEY_STATS2NV].as<bool>();
+                    Settings->Currency = json[JSON_KEY_CURRENCY] | Settings->Currency;
                     if (json.containsKey(JSON_KEY_INVCOLOR)) {
                         Settings->invertColors = json[JSON_KEY_INVCOLOR].as<bool>();
                     } else {
