@@ -154,14 +154,30 @@ String getBlockHeight(void){
 
 unsigned long mBTCUpdate = 0;
 
+// Keep only letters, uppercase, max 4 chars (e.g. "eur " -> "EUR"); default if empty
+String sanitizeCurrency(const char* value){
+    String out = "";
+    for (const char* c = value; c && *c && out.length() < 4; c++) {
+        if (isalpha((unsigned char)*c)) out += (char)toupper((unsigned char)*c);
+    }
+    if (out.length() == 0) out = DEFAULT_CURRENCY;
+    return out;
+}
+
+// USD keeps the original "$" prefix; other currencies get a suffix
+// (bitmap fonts have no euro glyph, so EUR -> "E")
+static String formatBTCPrice(void){
+    if (Settings.Currency == "USD" || Settings.Currency == "USDT") return "$" + String(bitcoin_price);
+    if (Settings.Currency == "EUR") return String(bitcoin_price) + "E";
+    return String(bitcoin_price) + Settings.Currency;
+}
+
 String getBTCprice(void){
     
     if((mBTCUpdate == 0) || (millis() - mBTCUpdate > UPDATE_BTC_min * 60 * 1000)){
     
         if (WiFi.status() != WL_CONNECTED) {
-            static char price_buffer[16];
-            snprintf(price_buffer, sizeof(price_buffer), "$%u", bitcoin_price);
-            return String(price_buffer);
+            return formatBTCPrice();
         }
         
         HTTPClient http;
@@ -169,7 +185,9 @@ String getBTCprice(void){
         bool priceUpdated = false;
 
         try {
-        http.begin(getBTCAPI);
+        String currencyLower = Settings.Currency;
+        currencyLower.toLowerCase();
+        http.begin(String(getBTCAPI) + currencyLower);
         int httpCode = http.GET();
 
         if (httpCode == HTTP_CODE_OK) {
@@ -178,8 +196,8 @@ String getBTCprice(void){
             StaticJsonDocument<1024> doc;
             deserializeJson(doc, payload);
           
-            if (doc.containsKey("bitcoin") && doc["bitcoin"].containsKey("usd")) {
-                bitcoin_price = doc["bitcoin"]["usd"];
+            if (doc.containsKey("bitcoin") && doc["bitcoin"].containsKey(currencyLower)) {
+                bitcoin_price = doc["bitcoin"][currencyLower];
             }
 
             doc.clear();
@@ -194,9 +212,7 @@ String getBTCprice(void){
         }
     }  
   
-  static char price_buffer[16];
-  snprintf(price_buffer, sizeof(price_buffer), "$%u", bitcoin_price);
-  return String(price_buffer);
+  return formatBTCPrice();
 }
 
 unsigned long mTriggerUpdate = 0;
@@ -410,6 +426,9 @@ String getPoolAPIUrl(void) {
     if (Settings.PoolAddress == "public-pool.io") {
         poolAPIUrl = "https://public-pool.io:40557/api/client/";
     } 
+    else if (Settings.PoolAddress == "solo.homeminingitalia.org") {
+        poolAPIUrl = "https://solo.homeminingitalia.org/api/client/";
+    }
     else {
         if (Settings.PoolAddress == "pool.nerdminers.org") {
             poolAPIUrl = "https://pool.nerdminers.org/users/";

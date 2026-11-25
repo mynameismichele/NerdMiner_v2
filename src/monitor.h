@@ -16,7 +16,7 @@
 
 //#define getBTCAPI "https://api.coindesk.com/v1/bpi/currentprice.json" -- doesn't work anymore
 //#define getBTCAPI "https://api.blockchain.com/v3/exchange/tickers/BTC-USDT" -- updates infrequently
-#define getBTCAPI "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd"
+#define getBTCAPI "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=" // + currency (lowercase), set in the config portal
 
 #define UPDATE_BTC_min   1
 
@@ -132,5 +132,6 @@ pool_data getPoolData(void);
 
 clock_data_t getClockData_t(unsigned long mElapsed);
 String getPoolAPIUrl(void);
+String sanitizeCurrency(const char* value);
 
 #endif //MONITOR_API_H

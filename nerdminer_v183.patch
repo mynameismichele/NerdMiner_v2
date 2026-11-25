@@ -1,0 +1,223 @@
+diff --git a/src/drivers/storage/SDCard.cpp b/src/drivers/storage/SDCard.cpp
+index c8c579d..7d925bb 100644
+--- a/src/drivers/storage/SDCard.cpp
++++ b/src/drivers/storage/SDCard.cpp
+@@ -123,6 +123,7 @@ bool SDCard::loadConfigFile(TSettings* Settings)
+                         Settings->Timezone = json[JSON_KEY_TIMEZONE].as<int>();
+                     if (json.containsKey(JSON_KEY_STATS2NV))
+                         Settings->saveStats = json[JSON_KEY_STATS2NV].as<bool>();
++                    Settings->Currency = json[JSON_KEY_CURRENCY] | Settings->Currency;
+                     if (json.containsKey(JSON_KEY_INVCOLOR)) {
+                         Settings->invertColors = json[JSON_KEY_INVCOLOR].as<bool>();
+                     } else {
+diff --git a/src/drivers/storage/nvMemory.cpp b/src/drivers/storage/nvMemory.cpp
+index f71ee22..e38ef3f 100644
+--- a/src/drivers/storage/nvMemory.cpp
++++ b/src/drivers/storage/nvMemory.cpp
+@@ -36,6 +36,7 @@ bool nvMemory::saveConfig(TSettings* Settings)
+         json[JSON_SPIFFS_KEY_TIMEZONE] = Settings->Timezone;
+         json[JSON_SPIFFS_KEY_STATS2NV] = Settings->saveStats;
+         json[JSON_SPIFFS_KEY_INVCOLOR] = Settings->invertColors;
++        json[JSON_SPIFFS_KEY_CURRENCY] = Settings->Currency;
+         json[JSON_SPIFFS_KEY_BRIGHTNESS] = Settings->Brightness;
+ 
+         // Open config file
+@@ -99,6 +100,7 @@ bool nvMemory::loadConfig(TSettings* Settings)
+                         Settings->Timezone = json[JSON_SPIFFS_KEY_TIMEZONE].as<int>();
+                     if (json.containsKey(JSON_SPIFFS_KEY_STATS2NV))
+                         Settings->saveStats = json[JSON_SPIFFS_KEY_STATS2NV].as<bool>();
++                    Settings->Currency = json[JSON_SPIFFS_KEY_CURRENCY] | Settings->Currency;
+                     if (json.containsKey(JSON_SPIFFS_KEY_INVCOLOR)) {
+                         Settings->invertColors = json[JSON_SPIFFS_KEY_INVCOLOR].as<bool>();
+                     } else {
+diff --git a/src/drivers/storage/storage.h b/src/drivers/storage/storage.h
+index 81341ea..3925526 100644
+--- a/src/drivers/storage/storage.h
++++ b/src/drivers/storage/storage.h
+@@ -19,6 +19,7 @@
+ #define DEFAULT_TIMEZONE	2
+ #define DEFAULT_SAVESTATS	false
+ #define DEFAULT_INVERTCOLORS	false
++#define DEFAULT_CURRENCY	"EUR"
+ #define DEFAULT_BRIGHTNESS	250
+ 
+ // JSON config files
+@@ -34,6 +35,7 @@
+ #define JSON_KEY_TIMEZONE	"Timezone"
+ #define JSON_KEY_STATS2NV	"SaveStats"
+ #define JSON_KEY_INVCOLOR	"invertColors"
++#define JSON_KEY_CURRENCY	"Currency"
+ #define JSON_KEY_BRIGHTNESS	"Brightness"
+ 
+ // JSON config file SPIFFS (different for backward compatibility with existing devices)
+@@ -44,6 +46,7 @@
+ #define JSON_SPIFFS_KEY_TIMEZONE	"gmtZone"
+ #define JSON_SPIFFS_KEY_STATS2NV	"saveStatsToNVS"
+ #define JSON_SPIFFS_KEY_INVCOLOR	"invertColors"
++#define JSON_SPIFFS_KEY_CURRENCY	"currency"
+ #define JSON_SPIFFS_KEY_BRIGHTNESS	"Brightness"
+ 
+ // settings
+@@ -58,6 +61,7 @@ struct TSettings
+ 	int Timezone{ DEFAULT_TIMEZONE };
+ 	bool saveStats{ DEFAULT_SAVESTATS };
+ 	bool invertColors{ DEFAULT_INVERTCOLORS };
++	String Currency{ DEFAULT_CURRENCY };
+ 	int Brightness{ DEFAULT_BRIGHTNESS };
+ };
+ 
+diff --git a/src/monitor.cpp b/src/monitor.cpp
+index f9db1bb..61d632a 100644
+--- a/src/monitor.cpp
++++ b/src/monitor.cpp
+@@ -154,14 +154,30 @@ String getBlockHeight(void){
+ 
+ unsigned long mBTCUpdate = 0;
+ 
++// Keep only letters, uppercase, max 4 chars (e.g. "eur " -> "EUR"); default if empty
++String sanitizeCurrency(const char* value){
++    String out = "";
++    for (const char* c = value; c && *c && out.length() < 4; c++) {
++        if (isalpha((unsigned char)*c)) out += (char)toupper((unsigned char)*c);
++    }
++    if (out.length() == 0) out = DEFAULT_CURRENCY;
++    return out;
++}
++
++// USD keeps the original "$" prefix; other currencies get a suffix
++// (bitmap fonts have no euro glyph, so EUR -> "E")
++static String formatBTCPrice(void){
++    if (Settings.Currency == "USD" || Settings.Currency == "USDT") return "$" + String(bitcoin_price);
++    if (Settings.Currency == "EUR") return String(bitcoin_price) + "E";
++    return String(bitcoin_price) + Settings.Currency;
++}
++
+ String getBTCprice(void){
+     
+     if((mBTCUpdate == 0) || (millis() - mBTCUpdate > UPDATE_BTC_min * 60 * 1000)){
+     
+         if (WiFi.status() != WL_CONNECTED) {
+-            static char price_buffer[16];
+-            snprintf(price_buffer, sizeof(price_buffer), "$%u", bitcoin_price);
+-            return String(price_buffer);
++            return formatBTCPrice();
+         }
+         
+         HTTPClient http;
+@@ -169,7 +185,9 @@ String getBTCprice(void){
+         bool priceUpdated = false;
+ 
+         try {
+-        http.begin(getBTCAPI);
++        String currencyLower = Settings.Currency;
++        currencyLower.toLowerCase();
++        http.begin(String(getBTCAPI) + currencyLower);
+         int httpCode = http.GET();
+ 
+         if (httpCode == HTTP_CODE_OK) {
+@@ -178,8 +196,8 @@ String getBTCprice(void){
+             StaticJsonDocument<1024> doc;
+             deserializeJson(doc, payload);
+           
+-            if (doc.containsKey("bitcoin") && doc["bitcoin"].containsKey("usd")) {
+-                bitcoin_price = doc["bitcoin"]["usd"];
++            if (doc.containsKey("bitcoin") && doc["bitcoin"].containsKey(currencyLower)) {
++                bitcoin_price = doc["bitcoin"][currencyLower];
+             }
+ 
+             doc.clear();
+@@ -194,9 +212,7 @@ String getBTCprice(void){
+         }
+     }  
+   
+-  static char price_buffer[16];
+-  snprintf(price_buffer, sizeof(price_buffer), "$%u", bitcoin_price);
+-  return String(price_buffer);
++  return formatBTCPrice();
+ }
+ 
+ unsigned long mTriggerUpdate = 0;
+@@ -410,6 +426,9 @@ String getPoolAPIUrl(void) {
+     if (Settings.PoolAddress == "public-pool.io") {
+         poolAPIUrl = "https://public-pool.io:40557/api/client/";
+     } 
++    else if (Settings.PoolAddress == "solo.homeminingitalia.org") {
++        poolAPIUrl = "https://solo.homeminingitalia.org/api/client/";
++    }
+     else {
+         if (Settings.PoolAddress == "pool.nerdminers.org") {
+             poolAPIUrl = "https://pool.nerdminers.org/users/";
+diff --git a/src/monitor.h b/src/monitor.h
+index 94ef376..e1beb9b 100644
+--- a/src/monitor.h
++++ b/src/monitor.h
+@@ -16,7 +16,7 @@
+ 
+ //#define getBTCAPI "https://api.coindesk.com/v1/bpi/currentprice.json" -- doesn't work anymore
+ //#define getBTCAPI "https://api.blockchain.com/v3/exchange/tickers/BTC-USDT" -- updates infrequently
+-#define getBTCAPI "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd"
++#define getBTCAPI "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=" // + currency (lowercase), set in the config portal
+ 
+ #define UPDATE_BTC_min   1
+ 
+@@ -132,5 +132,6 @@ pool_data getPoolData(void);
+ 
+ clock_data_t getClockData_t(unsigned long mElapsed);
+ String getPoolAPIUrl(void);
++String sanitizeCurrency(const char* value);
+ 
+ #endif //MONITOR_API_H
+diff --git a/src/wManager.cpp b/src/wManager.cpp
+index d812981..704b3fd 100644
+--- a/src/wManager.cpp
++++ b/src/wManager.cpp
+@@ -224,6 +224,9 @@ void init_WifiManager()
+   sprintf(charZone, "%d", Settings.Timezone);
+   WiFiManagerParameter time_text_box_num("TimeZone", "TimeZone fromUTC (-12/+12)", charZone, 3);
+ 
++  // Text box (String) - currency of the BTC price (EUR, USD, GBP...)
++  WiFiManagerParameter currency_text_box("Currency", "BTC price currency (EUR, USD, GBP...)", Settings.Currency.c_str(), 4);
++
+   WiFiManagerParameter features_html("<hr><br><label style=\"font-weight: bold;margin-bottom: 25px;display: inline-block;\">Features</label>");
+ 
+   char checkboxParams[24] = "type=\"checkbox\"";
+@@ -241,6 +244,7 @@ void init_WifiManager()
+   wm.addParameter(&password_text_box);
+   wm.addParameter(&addr_text_box);
+   wm.addParameter(&time_text_box_num);
++  wm.addParameter(&currency_text_box);
+   wm.addParameter(&features_html);
+   wm.addParameter(&save_stats_to_nvs);
+   #if defined(ESP32_2432S028R) || defined(ESP32_2432S028_2USB)
+@@ -279,6 +283,7 @@ void init_WifiManager()
+             strncpy(Settings.PoolPassword, password_text_box.getValue(), sizeof(Settings.PoolPassword));
+             strncpy(Settings.BtcWallet, addr_text_box.getValue(), sizeof(Settings.BtcWallet));
+             Settings.Timezone = atoi(time_text_box_num.getValue());
++            Settings.Currency = sanitizeCurrency(currency_text_box.getValue());
+             //Serial.println(save_stats_to_nvs.getValue());
+             Settings.saveStats = (strncmp(save_stats_to_nvs.getValue(), "T", 1) == 0);
+             #if defined(ESP32_2432S028R) || defined(ESP32_2432S028_2USB)
+@@ -312,6 +317,7 @@ void init_WifiManager()
+                 strncpy(Settings.PoolPassword, password_text_box.getValue(), sizeof(Settings.PoolPassword));
+                 strncpy(Settings.BtcWallet, addr_text_box.getValue(), sizeof(Settings.BtcWallet));
+                 Settings.Timezone = atoi(time_text_box_num.getValue());
++                Settings.Currency = sanitizeCurrency(currency_text_box.getValue());
+                 // Serial.println(save_stats_to_nvs.getValue());
+                 Settings.saveStats = (strncmp(save_stats_to_nvs.getValue(), "T", 1) == 0);
+                 #if defined(ESP32_2432S028R) || defined(ESP32_2432S028_2USB)
+@@ -361,6 +367,7 @@ void init_WifiManager()
+ 
+         //Convert the number value
+         Settings.Timezone = atoi(time_text_box_num.getValue());
++        Settings.Currency = sanitizeCurrency(currency_text_box.getValue());
+         Serial.print("TimeZone fromUTC: ");
+         Serial.println(Settings.Timezone);
+ 
+@@ -403,6 +410,7 @@ void init_WifiManager()
+ 
+     //Convert the number value
+     Settings.Timezone = atoi(time_text_box_num.getValue());
++    Settings.Currency = sanitizeCurrency(currency_text_box.getValue());
+     Serial.print("TimeZone fromUTC: ");
+     Serial.println(Settings.Timezone);
+ 
